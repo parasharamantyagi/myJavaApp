@@ -1,3 +1,22 @@
 spring:
   application:
     name: myJavaApp
+
+  datasource:
+    url: jdbc:postgresql://localhost:5434/myjavaapp
+    username: myjavaapp
+    password: secret
+
+  jpa:
+    hibernate:
+      ddl-auto: update      # auto-create/update tables from your @Entity classes
+    open-in-view: false
+
+  # Needed for browser auto-refresh in Step 5.
+  # In Spring Boot 4 this is OFF by default.
+  devtools:
+    livereload:
+      enabled: true
+
+server:
+  port: 8080
