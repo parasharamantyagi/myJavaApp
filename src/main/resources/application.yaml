@@ -9,8 +9,12 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update      # auto-create/update tables from your @Entity classes
+      ddl-auto: validate      # was: update
     open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
 
   # Needed for browser auto-refresh in Step 5.
   # In Spring Boot 4 this is OFF by default.

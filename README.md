@@ -450,3 +450,37 @@ sudo journalctl -u myjavaapp -f      # live logs
 - Return JSON instead of text by returning an object or a `record` from the controller.
 - Add `spring-boot-starter-actuator` for health checks at `/actuator/health`.
 - See `HELP.md` for the official Spring Boot reference links for this exact version.
+
+For dependencies
+Step 1 — Edit build.gradle
+
+Open build.gradle in the project root and add the two lines inside the existing dependencies { } block:
+
+groovy
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-restclient'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.flywaydb:flyway-core'                    // ← add
+	implementation 'org.flywaydb:flyway-database-postgresql'     // ← add
+	compileOnly 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	runtimeOnly 'org.postgresql:postgresql'
+	annotationProcessor 'org.projectlombok:lombok'
+	// ... rest unchanged
+}
+
+Step 2 — Let Gradle download them
+
+Two ways, pick either:
+
+bash
+./gradlew build --refresh-dependencies
+
+Step 3 — Create the migrations folder
+
+Flyway looks in one specific place by default:
+
+bash
+mkdir -p src/main/resources/db/migration
