@@ -4,118 +4,222 @@ My first Spring Boot project — a Java web application built with Gradle.
 
 | What | Version |
 |------|---------|
+| Project | Gradle - Groovy |
+| Language | Java |
 | Java | 21 |
 | Spring Boot | 4.0.8 |
+| Packaging | Jar |
+| Configuration | YAML |
 | Gradle | 9.7.1 (via `./gradlew`, no install needed) |
-| Database | PostgreSQL (Spring Data JPA) |
+| Database | PostgreSQL 14 (Spring Data JPA) |
 | Web server | Embedded Tomcat 11 (port 8080) |
 
----
 
-## Table of contents
+## Gradle command reference
 
-1. [Prerequisites](#1-prerequisites)
-2. [Project structure](#2-project-structure)
-3. [Step 1 — Start a PostgreSQL database](#step-1--start-a-postgresql-database)
-4. [Step 2 — Configure the database in the app](#step-2--configure-the-database-in-the-app)
-5. [Step 3 — Add a page to see in the browser](#step-3--add-a-page-to-see-in-the-browser)
-6. [Step 4 — Run the app](#step-4--run-the-app)
-7. [Step 5 — Live reload: see code changes instantly in the browser](#step-5--live-reload-see-code-changes-instantly-in-the-browser)
-8. [Step 6 — Run the tests](#step-6--run-the-tests)
-9. [Step 7 — Build and deploy](#step-7--build-and-deploy)
-10. [Common errors and fixes](#common-errors-and-fixes)
-11. [Command cheat sheet](#command-cheat-sheet)
+Everything you run day to day. All commands are from the project root.
 
----
+### Running
+```bash
+./gradlew bootRun  # Run the app in development mode |
+./gradlew classes --continuous # Recompile on every file save (drives DevTools live reload) |
+./gradlew clean bootRun # Same, but wipes `build/` first — **use this after editing `build.gradle`** |
+./gradlew classes # Recompile once, manually |
+./gradlew --stop # The Gradle **build daemon** only — **does not stop your app** |
+```
+### Stopping
 
-## 1. Prerequisites
+These are three different things and people mix them up:
 
-Install these once, then check each one:
+| Command | Stops |
+|---------|-------|
+| `Ctrl + C` | Your app — the normal way, in the terminal running `bootRun` |
+| `pkill -f 'myJavaApp.*bootRun'` | Your app, when the terminal is gone or the process detached |
+| `lsof -ti:8080 \| xargs kill` | Whatever holds port 8080 (same result, by port instead of name) |
+
+> forks the app into a separate JVM, so the app keeps serving on 8080 afterwards.
+> Use `Ctrl + C` or `pkill` for the app itself.
+
+Confirm the app is actually down:
 
 ```bash
-java -version      # must show 21 (or newer)
-docker --version   # used to run PostgreSQL
-git --version
+lsof -i:8080                             # no output = port free
+curl http://localhost:8080/hello         # expect: Connection refused
 ```
 
-You do **not** need to install Gradle. The project ships with the Gradle wrapper
-(`./gradlew`), which downloads the correct Gradle version by itself on first use.
+If the browser still shows the page after this, that's browser cache — hard-refresh
+with `Ctrl + Shift + R`. Trust `curl`, not the browser.
 
----
+### Building and inspecting
 
-## 2. Project structure
+| Command | What it does |
+|---------|--------------|
+| `./gradlew test` | Run the tests |
+| `./gradlew clean bootJar` | Build the runnable jar into `build/libs/` |
+| `./gradlew build` | Compile + test + build the jar |
+| `./gradlew bootBuildImage` | Build a Docker image without a Dockerfile |
+| `./gradlew build --refresh-dependencies` | Re-resolve all dependencies |
+| `./gradlew dependencies --configuration runtimeClasspath` | Show what's actually on the runtime classpath |
+| `./gradlew tasks` | List every available task |
+| `java -jar build/libs/myJavaApp-0.0.1-SNAPSHOT.jar` | Run the built jar |
+
+Dependencies — click ADD DEPENDENCIES (Ctrl+B) 8 times
+
+┌──────────────────────┬─────────────────┬────────────────────────────────────────────┐
+│      Search for      │  Group in list  │                  Produces                  │
+├──────────────────────┼─────────────────┼────────────────────────────────────────────┤
+│ Spring Web           │ Web             │ spring-boot-starter-webmvc                 │
+├──────────────────────┼─────────────────┼────────────────────────────────────────────┤
+│ HTTP Client          │ Web             │ spring-boot-starter-restclient             │
+├──────────────────────┼─────────────────┼────────────────────────────────────────────┤
+│ Spring Data JPA      │ SQL             │ spring-boot-starter-data-jpa               │
+├──────────────────────┼─────────────────┼────────────────────────────────────────────┤
+│ PostgreSQL Driver    │ SQL             │ postgresql (runtimeOnly)                   │
+├──────────────────────┼─────────────────┼────────────────────────────────────────────┤
+│ Flyway Migration     │ SQL             │ spring-boot-starter-flyway                 │
+├──────────────────────┼─────────────────┼────────────────────────────────────────────┤
+│ Validation           │ I/O             │ spring-boot-starter-validation             │
+├──────────────────────┼─────────────────┼────────────────────────────────────────────┤
+│ Lombok               │ Developer Tools │ lombok (compileOnly + annotationProcessor) │
+├──────────────────────┼─────────────────┼────────────────────────────────────────────┤
+│ Spring Boot DevTools │ Developer Tools │ spring-boot-devtools (developmentOnly)     │
+└──────────────────────┴─────────────────┴────────────────────────────────────────────┘
+
+## Project structure
 
 ```
 myJavaApp/
 ├── build.gradle                 # dependencies and build config
 ├── settings.gradle              # project name
-├── gradlew / gradlew.bat        # Gradle wrapper (use this, not a global gradle)
+├── gradlew / gradlew.bat        # Gradle wrapper (use this, never a global gradle)
 ├── src/
 │   ├── main/
 │   │   ├── java/demo/com/example/myJavaApp/
-│   │   │   └── MyJavaAppApplication.java   # entry point (main method)
+│   │   │   ├── MyJavaAppApplication.java   # entry point
+│   │   │   └── web/HelloController.java    # REST endpoints
 │   │   └── resources/
-│   │       └── application.yaml            # all app settings live here
-│   └── test/
-│       └── java/demo/com/example/myJavaApp/
-│           └── MyJavaAppApplicationTests.java
-└── build/                       # generated output (not in git)
+│   │       ├── application.yaml            # all app settings
+│   │       └── db/migration/               # Flyway SQL migrations
+│   └── test/java/demo/com/example/myJavaApp/
+├── build/                       # generated output (not in git)
+└── bin/                         # VS Code Java output — ignore, not used by Gradle
 ```
+
+
+## Table of contents
+
+1. [Prerequisites](#prerequisites)
+2. [Project structure](#project-structure)
+3. [Gradle command reference](#gradle-command-reference)
+4. [Managing dependencies](#managing-dependencies)
+5. [Step 1 — Database](#step-1--database)
+6. [Step 2 — Configuration](#step-2--configuration)
+7. [Step 3 — The endpoint](#step-3--the-endpoint)
+8. [Step 4 — Run the app](#step-4--run-the-app)
+9. [Step 5 — Live reload](#step-5--live-reload)
+10. [Step 6 — Tests](#step-6--tests)
+11. [Step 7 — Build and deploy](#step-7--build-and-deploy)
+12. [Troubleshooting](#troubleshooting)
+
+
+## Prerequisites
+
+```bash
+java -version      # must show 21 or newer
+docker --version   # only needed if you don't already have PostgreSQL
+git --version
+```
+
+Gradle does **not** need installing — `./gradlew` downloads the right version itself.
+
+
+## Managing dependencies
+
+There is no `npm i` equivalent in Java. Dependencies are declared by hand-editing
+`build.gradle` — that file is this project's `package.json`.
+
+`node_modules/` has no equivalent — jars live in a shared `~/.gradle/caches/`.
+To add something, put a line inside the `dependencies { }` block:
+
+```groovy
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-restclient'
+	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.flywaydb:flyway-database-postgresql'
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	runtimeOnly 'org.postgresql:postgresql'
+	// test dependencies below…
+}
+```
+
+No version numbers — the `io.spring.dependency-management` plugin pins them to
+whatever Spring Boot 4.0.8 declares. Only write an explicit version for libraries
+Boot doesn't manage.
+
+Then **fully stop the app** and run `./gradlew clean bootRun`. DevTools cannot
+hot-reload a newly added jar.
+
+Verify a dependency actually resolved:
+
+```bash
+./gradlew dependencies --configuration runtimeClasspath | grep -i flyway
+./gradlew bootJar && unzip -l build/libs/*.jar | grep -i flyway
+```
+
+What the scopes mean:
+
+| Scope | Meaning |
+|-------|---------|
+| `implementation` | needed to compile and run |
+| `runtimeOnly` | needed at runtime only (JDBC drivers) |
+| `compileOnly` | needed to compile only (Lombok annotations) |
+| `annotationProcessor` | code generators that run at compile time |
+| `developmentOnly` | excluded from the built jar (DevTools) |
 
 ---
 
-## Step 1 — Start a PostgreSQL database
+## Step 1 — Database
 
-This project includes `spring-boot-starter-data-jpa` and the PostgreSQL driver.
-Because of that, **Spring Boot refuses to start without a database**. If you skip
-this step you will see:
+Spring Boot **refuses to start without a database** because `spring-boot-starter-data-jpa`
+and the PostgreSQL driver are on the classpath.
 
-```
-APPLICATION FAILED TO START
-Failed to configure a DataSource: 'url' attribute is not specified
-```
+This project uses an existing local PostgreSQL on **port 5432**, database **`localJava`**,
+managed through pgAdmin (server `local`). If that's your setup, nothing to do here.
 
-The easiest way to get a database is Docker — one command, nothing to install:
+If you need a fresh one instead, Docker is one command:
 
 ```bash
 docker run -d --name myjavaapp-postgres \
-  -e POSTGRES_DB=myjavaapp \
-  -e POSTGRES_USER=myjavaapp \
-  -e POSTGRES_PASSWORD=secret \
-  -p 5434:5432 \
+  -e POSTGRES_DB=localJava \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -p 5432:5432 \
   postgres:17
 ```
 
-Check it is up and accepting connections:
+Pick a different host port (`-p 5434:5432`) if 5432 is taken, and update
+`application.yaml` to match. Multiple PostgreSQL instances on one machine is a common
+trap — a *successful* connection isn't proof of a *correct* one. Cross-check the JDBC
+URL in the startup log against pgAdmin (right-click server → Properties → Connection).
 
 ```bash
-docker ps                                        # container should be "Up"
-docker exec myjavaapp-postgres pg_isready -U myjavaapp
-# expected: /var/run/postgresql:5432 - accepting connections
-```
-
-> **Why port 5434 and not the usual 5432?** On this machine both `5432` and
-> `5433` are already taken by other PostgreSQL instances (`5432` by the
-> `local-env-database-1` container). The `-p 5434:5432` above means "reach it on
-> 5434 from my machine, it still listens on 5432 inside the container", and
-> `application.yaml` is already set to `5434` to match. On a clean machine you can
-> use `-p 5432:5432` and change the URL in `application.yaml` back to `5432`.
-
-Useful database commands:
-
-```bash
-docker stop myjavaapp-postgres     # stop it (data is kept)
-docker start myjavaapp-postgres    # start it again
-docker rm -f myjavaapp-postgres    # delete it completely (data is lost)
+docker ps                                            # container should be "Up"
+docker exec myjavaapp-postgres pg_isready -U postgres
+docker stop  myjavaapp-postgres    # stop, data kept
+docker start myjavaapp-postgres    # start again
+docker rm -f myjavaapp-postgres    # delete completely, data lost
 ```
 
 ---
 
-## Step 2 — Configure the database in the app
+## Step 2 — Configuration
 
-This is **already done** in the repo — `src/main/resources/application.yaml` looks
-like this. Change the username, password and port here if you used different ones
-in Step 1:
+`src/main/resources/application.yaml`:
 
 ```yaml
 spring:
@@ -123,48 +227,61 @@ spring:
     name: myJavaApp
 
   datasource:
-    url: jdbc:postgresql://localhost:5434/myjavaapp
-    username: myjavaapp
-    password: secret
+    url: jdbc:postgresql://localhost:5432/localJava
+    username: postgres
+    password: postgres
 
   jpa:
     hibernate:
-      ddl-auto: update      # auto-create/update tables from your @Entity classes
+      ddl-auto: validate
     open-in-view: false
 
-  # Needed for browser auto-refresh in Step 5.
-  # In Spring Boot 4 this is OFF by default.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
   devtools:
     livereload:
-      enabled: true
+      enabled: true    # OFF by default in Spring Boot 4
 
 server:
   port: 8080
 ```
 
-What each part means:
-
 | Setting | Meaning |
 |---------|---------|
-| `datasource.url` | Where the database is. Must match the host port you published in Step 1 (`5434` here). |
-| `ddl-auto: update` | Hibernate creates/updates tables for you. Great for learning; **do not use in production** — use a migration tool such as Flyway or Liquibase there. |
-| `open-in-view: false` | Recommended default; avoids keeping database sessions open during view rendering. |
-| `server.port` | The port your app serves on — `http://localhost:8080`. |
+| `datasource.url` | Must match the host port your database listens on |
+| `ddl-auto: validate` | Hibernate checks entities against the real schema and fails loudly on a mismatch. Schema changes belong in Flyway migrations. Use `update` only for throwaway experiments — never in production |
+| `open-in-view: false` | Avoids holding database sessions open during view rendering |
+| `flyway.locations` | Where migration SQL lives — the default, listed here for clarity |
+
+### Flyway migrations
+
+Filenames are strict: `V<number>__<description>.sql` with **two** underscores.
+`V1_create.sql`, `v1__create.sql`, and `V1__create.SQL` are all ignored silently.
+
+```
+src/main/resources/db/migration/
+└── V1__create_question.sql
+```
+
+Every schema change is a **new file** — never edit an applied one. Flyway stores a
+checksum per migration in `flyway_schema_history` and fails validation if an old file
+changes, which guarantees every environment ran identical SQL.
 
 ---
 
-## Step 3 — The page you'll see in the browser
-
-Without a web endpoint a browser would only show a 404 error page, so the project
-includes one **already**:
+## Step 3 — The endpoint
 
 `src/main/java/demo/com/example/myJavaApp/web/HelloController.java`
 
 ```java
 package demo.com.example.myJavaApp.web;
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 public class HelloController {
@@ -173,168 +290,125 @@ public class HelloController {
 	public String hello() {
 		return "Hello from myJavaApp!";
 	}
+
+	@PostMapping("/items")
+	public ResponseEntity<Item> create(@Valid @RequestBody CreateItemRequest req) {
+		Item saved = new Item(1L, req.name(), req.price());
+		return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+	}
 }
 ```
 
-- `@RestController` — tells Spring this class handles web requests and returns data directly.
-- `@GetMapping("/hello")` — this method answers `GET http://localhost:8080/hello`.
+- `@RequestBody` — Jackson deserializes JSON into the record before your method
+  runs; there's no `req.body` step like Express. Read fields with `req.name()`, not
+  `req.getName()` — records name accessors after their components
+- `@Valid` — runs constraints *before* the method body; on failure Spring returns
+  400 and your code never executes
+- Returning an object or record produces JSON; returning a `String` produces
+  `text/plain`, which is why `/hello` isn't JSON
 
----
+Request DTOs are records with constraints:
 
-## Step 4 — Run the app
-
-```bash
-./gradlew bootRun
+```java
+public record CreateItemRequest(
+		@NotBlank(message = "name is required") String name,
+		@Positive(message = "price must be greater than 0") BigDecimal price
+) {}
 ```
 
-First run takes a few minutes (Gradle and all dependencies are downloaded).
-Wait for this line:
+First run takes a few minutes while dependencies download. Wait for:
 
 ```
 Tomcat started on port 8080 (http) with context path '/'
-Started MyJavaAppApplication in 2.365 seconds
+Started MyJavaAppApplication in 1.927 seconds
 ```
 
-Now open in your browser:
-
-**http://localhost:8080/hello**
-
-You should see: `Hello from myJavaApp!`
-
-Or test from the terminal:
+Test it:
 
 ```bash
 curl http://localhost:8080/hello
+# Hello from myJavaApp!
+
+curl -X POST http://localhost:8080/items \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Wheelchair","price":125.50}'
+# {"id":1,"name":"Wheelchair","price":125.50}
 ```
 
-**To stop the app:** press `Ctrl + C` in the terminal running it.
+The `Content-Type` header is mandatory on POST — omit it and you get 415.
+
+Stopping the app is covered in the [Gradle command reference](#stopping).
 
 ---
 
-## Step 5 — Live reload: see code changes instantly in the browser
+## Step 5 — Live reload
 
-The project already includes `spring-boot-devtools`, which restarts the app
-automatically whenever the compiled classes change. There are two levels:
-
-### 5a. Automatic app restart (code changes take effect without a manual restart)
-
-DevTools watches the `build/classes` folder — so a restart happens when your code
-is **recompiled**, not when you merely save the file. Set up one of these:
-
-**Option A — terminal only (works everywhere).** Keep two terminals open:
-
-```bash
-# Terminal 1 — runs the app, leave it running
-./gradlew bootRun
-
-# Terminal 2 — recompiles automatically every time you save a file
-./gradlew classes --continuous
-```
+`spring-boot-devtools` restarts the app when compiled classes change. It watches
+`build/classes`, so restarts trigger on **recompile**, not on save.
 
 
-# Terminal 2 — recompiles automatically every time you save a file
-./gradlew --stop
-pkill -f 'myJavaApp.*bootRun'
+**Option B — IntelliJ.** Enable once:
 
-**Option B — inside IntelliJ IDEA.** Enable auto-compile once, then just save:
+1. `Settings → Build, Execution, Deployment → Compiler` → **Build project automatically**
+2. `Settings → Advanced Settings` → **Allow auto-make to start even if the developed application is currently running**
 
-1. `Settings → Build, Execution, Deployment → Compiler` → check **Build project automatically**
-2. `Settings → Advanced Settings` → check **Allow auto-make to start even if the developed application is currently running**
-3. Run the app, then edit and save — IntelliJ compiles and DevTools restarts.
+**Option C — manual.** Run `./gradlew classes` when you want changes picked up.
 
-**Option C — manual trigger.** In a second terminal run `./gradlew classes`
-whenever you want your changes picked up.
+Restarts take ~0.3s versus ~2s, because DevTools reloads only your classes.
 
-**Try it:**
+### Browser auto-refresh
 
-1. With the app running, change the message in `HelloController.java` to
-   `"Hello again, live reloaded!"` and save.
-2. Recompile (automatic with Option A/B, or run `./gradlew classes`).
-3. In the app's terminal you will see a fast restart:
-   ```
-   Started MyJavaAppApplication in 0.284 seconds
-   ```
-4. Refresh **http://localhost:8080/hello** — the new text is there.
+DevTools runs a LiveReload server that refreshes the browser after each restart.
 
-Restarts are much faster than a full startup (~0.3s vs ~2.5s) because DevTools
-reloads only your classes, not the libraries.
+1. Set `spring.devtools.livereload.enabled: true` (Step 2) — off by default in Boot 4
+2. Verify it's up: `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:35729/livereload.js` → expect `200`
+3. Install the [LiveReload extension](https://chromewebstore.google.com/detail/livereload/jnihajbhpnppcggbcgedagnkighmdlei)
+   (Chrome or Firefox) and click its icon on your page — solid centre dot means connected
 
-### 5b. Automatic browser refresh (you don't even press F5)
-
-DevTools also runs a **LiveReload** server that tells the browser to refresh
-itself after each restart.
-
-1. Make sure `spring.devtools.livereload.enabled: true` is in your
-   `application.yaml` (Step 2) — **in Spring Boot 4 this is disabled by default**.
-2. Restart the app, then verify the LiveReload server is up:
-   ```bash
-   curl -s -o /dev/null -w "%{http_code}\n" http://localhost:35729/livereload.js
-   # expected: 200
-   ```
-3. Install the **LiveReload** browser extension
-   ([Chrome](https://chromewebstore.google.com/detail/livereload/jnihajbhpnppcggbcgedagnkighmdlei),
-   also available for Firefox) and click its toolbar icon on your page so the
-   centre dot turns solid — that means it is connected.
-4. Now edit code → save → recompile. The browser tab refreshes on its own.
-
-> LiveReload refreshes the **page**; it does not hot-swap Java code. Bigger
-> changes (adding dependencies in `build.gradle`, changing `application.yaml`
-> heavily) still need a full stop and `./gradlew bootRun`.
+> LiveReload refreshes the **page**; it does not hot-swap Java code. Changes to
+> `build.gradle` or significant `application.yaml` edits need a full stop and
+> `./gradlew clean bootRun`.
 
 ---
 
-## Step 6 — Run the tests
+## Step 6 — Tests
 
 ```bash
 ./gradlew test
 ```
 
-`MyJavaAppApplicationTests.contextLoads()` starts the whole Spring context, so
-**the database from Step 1 must be running** or the test will fail with the same
-`DataSource` error. Expected output:
-
-```
-BUILD SUCCESSFUL
-```
-
-The HTML report is written to `build/reports/tests/test/index.html`.
+`MyJavaAppApplicationTests.contextLoads()` boots the whole Spring context, so the
+database must be running or it fails with the same `DataSource` error. HTML report
+lands in `build/reports/tests/test/index.html`.
 
 ---
 
 ## Step 7 — Build and deploy
 
-### 7a. Build a runnable jar
+### Runnable jar
 
 ```bash
 ./gradlew clean bootJar
-ls -lh build/libs/
-# myJavaApp-0.0.1-SNAPSHOT.jar   (~54 MB — app + all libraries + Tomcat inside)
+ls -lh build/libs/       # myJavaApp-0.0.1-SNAPSHOT.jar (~54 MB, includes Tomcat)
 ```
 
-`./gradlew build` does the same plus running the tests.
-
-### 7b. Run the jar anywhere Java 21 is installed
-
-Never hard-code production passwords in `application.yaml` — pass them as
-environment variables, which override the file:
+Never hard-code production credentials in `application.yaml` — environment
+variables override the file:
 
 ```bash
-SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5434/myjavaapp \
-SPRING_DATASOURCE_USERNAME=myjavaapp \
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/localJava \
+SPRING_DATASOURCE_USERNAME=postgres \
 SPRING_DATASOURCE_PASSWORD=secret \
 SERVER_PORT=9090 \
 java -jar build/libs/myJavaApp-0.0.1-SNAPSHOT.jar
 ```
 
-Then open **http://localhost:9090/hello**.
+Mapping rule: `spring.datasource.url` → `SPRING_DATASOURCE_URL` (uppercase, dots and
+dashes to underscores).
 
-The rule is simple: `spring.datasource.url` in YAML becomes
-`SPRING_DATASOURCE_URL` as an environment variable (uppercase, dots and dashes
-become underscores).
+### Docker image
 
-### 7c. Deploy as a Docker image
-
-Create a `Dockerfile` in the project root:
+`Dockerfile` in the project root:
 
 ```dockerfile
 FROM eclipse-temurin:21-jre
@@ -344,8 +418,6 @@ EXPOSE 8080
 ENTRYPOINT ["java","-jar","/app/app.jar"]
 ```
 
-Build and run it:
-
 ```bash
 ./gradlew clean bootJar
 docker build -t myjavaapp:latest .
@@ -353,134 +425,107 @@ docker build -t myjavaapp:latest .
 docker run -d --name myjavaapp \
   --add-host=host.docker.internal:host-gateway \
   -p 8081:8080 \
-  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5434/myjavaapp \
-  -e SPRING_DATASOURCE_USERNAME=myjavaapp \
-  -e SPRING_DATASOURCE_PASSWORD=secret \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/localJava \
+  -e SPRING_DATASOURCE_USERNAME=postgres \
+  -e SPRING_DATASOURCE_PASSWORD=postgres \
   myjavaapp:latest
 
-curl http://localhost:8081/hello
-docker logs -f myjavaapp     # watch the logs
-docker rm -f myjavaapp       # stop and remove
+docker logs -f myjavaapp
+docker rm -f myjavaapp
 ```
 
-Inside a container, `localhost` means the container itself — that is why the
-database URL uses `host.docker.internal` (mapped to your machine by
-`--add-host=...:host-gateway`) instead of `localhost`.
+Inside a container `localhost` means the container itself — hence
+`host.docker.internal` for a database on your machine. Or skip the Dockerfile
+entirely with `./gradlew bootBuildImage`.
 
-### 7d. Alternative: let Spring Boot build the image for you
+### As a service
 
-No Dockerfile needed — Spring Boot builds an optimised image with Cloud Native
-Buildpacks (needs Docker running; the first build downloads a large builder image):
-
-```bash
-./gradlew bootBuildImage
-docker images | grep myjavaapp
-```
-
-### 7e. Running it as a real service
-
-On a Linux server, run the jar under `systemd` so it starts on boot and restarts
-on crash. Create `/etc/systemd/system/myjavaapp.service`:
-
-```ini
-[Unit]
-Description=myJavaApp
-After=network.target
-
-[Service]
-User=myjavaapp
-ExecStart=/usr/bin/java -jar /opt/myjavaapp/app.jar
-Environment=SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5434/myjavaapp
-Environment=SPRING_DATASOURCE_USERNAME=myjavaapp
-Environment=SPRING_DATASOURCE_PASSWORD=changeme
-SuccessExitStatus=143
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
+On Linux, run the jar under `systemd` so it restarts on crash and starts on boot.
+Create `/etc/systemd/system/myjavaapp.service` with `ExecStart=/usr/bin/java -jar
+/opt/myjavaapp/app.jar`, the `SPRING_DATASOURCE_*` values as `Environment=` lines,
+`SuccessExitStatus=143` and `Restart=always`. Then:
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now myjavaapp
-sudo systemctl status myjavaapp
-sudo journalctl -u myjavaapp -f      # live logs
+sudo journalctl -u myjavaapp -f
 ```
 
-> DevTools is a **development-only** tool. It is declared as `developmentOnly` in
-> `build.gradle`, so it is automatically excluded from the jar — no live reload in
-> production, which is exactly what you want.
+> DevTools is `developmentOnly` in `build.gradle`, so it's excluded from the jar —
+> no live reload in production, which is what you want.
 
 ---
 
-## Common errors and fixes
+## Troubleshooting
 
-| Error message | Cause | Fix |
-|---------------|-------|-----|
-| `Failed to configure a DataSource: 'url' attribute is not specified` | No database configured | Do Step 1 and Step 2 |
-| `Connection to localhost:5434 refused` | Database not running | `docker start myjavaapp-postgres` |
-| `Bind for 0.0.0.0:5434 failed: port is already allocated` | Something else grabbed that port | Pick a free one (`-p 5435:5432`) and update `datasource.url` |
-| `Web server failed to start. Port 8080 was already in use` | App already running | Stop it (`Ctrl + C`), or set `SERVER_PORT=8081` |
-| `Whitelabel Error Page` / 404 | No endpoint for that URL | Check the path — Step 3 creates `/hello`, not `/` |
-| Code changes don't appear | Classes not recompiled | Run `./gradlew classes` or set up Option A/B in Step 5a |
-| Browser doesn't auto-refresh | LiveReload off or extension not connected | Set `spring.devtools.livereload.enabled: true`; click the extension icon |
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `Failed to configure a DataSource: 'url' attribute is not specified` | No database configured | Steps 1 and 2 |
+| `Connection to localhost:5432 refused` | Database not running | Start PostgreSQL / `docker start` |
+| `FATAL: database "localJava" does not exist` | Wrong port or database name | Cross-check `application.yaml` against pgAdmin's connection properties |
+| `Port 8080 was already in use` | App already running | See [Stopping](#stopping) |
+| `Whitelabel Error Page` / 404 | No endpoint for that URL | The path is `/hello`, not `/` |
+| 415 Unsupported Media Type on POST | Missing header | Add `-H "Content-Type: application/json"` |
+| Code changes don't appear | Classes not recompiled | `./gradlew classes`, or Option A/B in Step 5 |
+| Browser doesn't auto-refresh | LiveReload off or extension not connected | Step 5 |
+| New dependency has no effect | DevTools restart doesn't load new jars | Fully stop, then `./gradlew clean bootRun` |
+| `Schema-validation: missing column [...]` | Entity and migration disagree | Align the SQL with the `@Entity`, or add a new `V<n>__` migration |
 
----
+### No Flyway output in the startup log
 
-## Command cheat sheet
+Flyway auto-configuration is gated on `@ConditionalOnClass(Flyway.class)`. If Flyway
+isn't on the classpath the whole `spring.flyway.*` block is **ignored silently** —
+config looks right, does nothing. Check all three:
 
-| Command | What it does |
-|---------|--------------|
-| `./gradlew bootRun` | Run the app in development |
-| `./gradlew classes --continuous` | Recompile on every save (drives live reload) |
-| `./gradlew test` | Run the tests |
-| `./gradlew clean bootJar` | Build the runnable jar |
-| `./gradlew build` | Compile + test + build the jar |
-| `./gradlew bootBuildImage` | Build a Docker image without a Dockerfile |
-| `./gradlew dependencies` | Show the dependency tree |
-| `./gradlew tasks` | List every available task |
-| `java -jar build/libs/myJavaApp-0.0.1-SNAPSHOT.jar` | Run the built jar |
-| `docker start myjavaapp-postgres` | Start the database |
+```bash
+find ~/.gradle/caches -name "flyway-core*.jar" | head -1
+./gradlew dependencies --configuration runtimeClasspath | grep -i flyway
+./gradlew bootJar && unzip -l build/libs/*.jar | grep -i flyway
+```
+
+If Flyway *is* present but still silent, make the auto-configuration explain itself —
+look for `FlywayAutoConfiguration` under `Negative matches`:
+
+Boot 4 restructured its starters, so `spring-boot-starter-flyway` may be the intended
+artifact rather than bare `flyway-core`. To rule out your SQL and connection entirely,
+run migrations without Spring via the `org.flywaydb.flyway` Gradle plugin
+(`./gradlew flywayMigrate flywayInfo`).
+
+### `V1` fails with `relation "question" already exists`
+
+A table left over from a previous `ddl-auto: update` run. Either drop it and let
+Flyway own the schema:
+
+```sql
+DROP TABLE IF EXISTS question;
+```
+
+…or keep the data and have Flyway adopt the current state as its baseline:
+
+```yaml
+spring:
+  flyway:
+    baseline-on-migrate: true
+```
+
+### pgAdmin doesn't show a new table
+
+Right-click **Schemas → public → Tables → Refresh** specifically — refreshing the
+database node isn't enough. And confirm the query tab is on the right database;
+pgAdmin keeps a separate connection per tab:
+
+```sql
+SELECT current_database();
+SELECT * FROM flyway_schema_history;
+```
 
 ---
 
 ## Where to go next
 
-- Add an `@Entity` class and a `JpaRepository` to save data in PostgreSQL.
-- Return JSON instead of text by returning an object or a `record` from the controller.
-- Add `spring-boot-starter-actuator` for health checks at `/actuator/health`.
-- See `HELP.md` for the official Spring Boot reference links for this exact version.
-
-For dependencies
-Step 1 — Edit build.gradle
-
-Open build.gradle in the project root and add the two lines inside the existing dependencies { } block:
-
-groovy
-dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	implementation 'org.springframework.boot:spring-boot-starter-restclient'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
-	implementation 'org.flywaydb:flyway-core'                    // ← add
-	implementation 'org.flywaydb:flyway-database-postgresql'     // ← add
-	compileOnly 'org.projectlombok:lombok'
-	developmentOnly 'org.springframework.boot:spring-boot-devtools'
-	runtimeOnly 'org.postgresql:postgresql'
-	annotationProcessor 'org.projectlombok:lombok'
-	// ... rest unchanged
-}
-
-Step 2 — Let Gradle download them
-
-Two ways, pick either:
-
-bash
-./gradlew build --refresh-dependencies
-
-Step 3 — Create the migrations folder
-
-Flyway looks in one specific place by default:
-
-bash
-mkdir -p src/main/resources/db/migration
+- `@Entity` + `JpaRepository` to persist data
+- `@RestControllerAdvice` global exception handler for consistent `ProblemDetail` responses
+- Layered packages: `controller` / `service` / `repository` / `dto` / `entity`
+- `spring-boot-starter-actuator` for `/actuator/health`
+- springdoc-openapi for Swagger UI; Testcontainers so tests don't need a live database
+- `application-dev.yaml` / `application-prod.yaml` profiles, secrets from env vars only
