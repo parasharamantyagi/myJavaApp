@@ -22,8 +22,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-restclient'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
-	implementation 'org.flywaydb:flyway-core'                    // ← add
-	implementation 'org.flywaydb:flyway-database-postgresql'     // ← add
+	// Spring Boot 4 moved Flyway auto-configuration out of spring-boot-autoconfigure
+	// into its own module; this starter is what brings FlywayAutoConfiguration in.
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	implementation 'org.flywaydb:flyway-database-postgresql'
 	compileOnly 'org.projectlombok:lombok'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	runtimeOnly 'org.postgresql:postgresql'
