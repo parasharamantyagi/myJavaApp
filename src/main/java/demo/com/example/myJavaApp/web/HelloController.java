@@ -1,6 +1,7 @@
 package demo.com.example.myJavaApp.web;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.http.HttpStatus;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import demo.com.example.myJavaApp.question.QuestionAnswerService;
 import jakarta.validation.Valid;
 
 @RestController
@@ -19,9 +21,20 @@ public class HelloController {
 
     private final AtomicLong idGenerator = new AtomicLong(1);
 
+    private final QuestionAnswerService questionAnswerService;
+
+    // Constructor injection: Spring passes the service in, so the controller
+    // never builds its own dependencies and stays easy to test.
+    HelloController(QuestionAnswerService questionAnswerService) {
+        this.questionAnswerService = questionAnswerService;
+    }
+
     @GetMapping("/hello")
-    public String hello() {
-        return "Hello from myJavaApp!";
+    public List<QuestionAnswerResponse> hello() {
+        return questionAnswerService.findAll()
+                .stream()
+                .map(QuestionAnswerResponse::from)
+                .toList();
     }
 
     @PostMapping("/items")
