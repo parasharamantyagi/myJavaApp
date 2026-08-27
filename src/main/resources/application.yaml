@@ -3,9 +3,9 @@ spring:
     name: myJavaApp
 
   datasource:
-    url: jdbc:postgresql://localhost:5434/myjavaapp
-    username: myjavaapp
-    password: secret
+    url: jdbc:postgresql://localhost:5432/localJava
+    username: postgres
+    password: postgres
 
   jpa:
     hibernate:

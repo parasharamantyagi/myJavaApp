@@ -231,6 +231,11 @@ is **recompiled**, not when you merely save the file. Set up one of these:
 ./gradlew classes --continuous
 ```
 
+
+# Terminal 2 — recompiles automatically every time you save a file
+./gradlew --stop
+pkill -f 'myJavaApp.*bootRun'
+
 **Option B — inside IntelliJ IDEA.** Enable auto-compile once, then just save:
 
 1. `Settings → Build, Execution, Deployment → Compiler` → check **Build project automatically**
